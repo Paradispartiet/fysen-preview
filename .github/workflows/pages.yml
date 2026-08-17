@@ -5,7 +5,6 @@ on:
   push:
     branches: [main]
     paths:
-      - "index.html"
       - ".github/workflows/pages.yml"
 
 permissions:
@@ -20,20 +19,27 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare site
+      - name: Fetch compiled Fysen preview
+        shell: bash
         run: |
+          set -euo pipefail
+          rm -rf _site preview.zip
           mkdir -p _site
-          cp index.html _site/index.html
+          curl --fail --location --retry 3 --output preview.zip 'https://sdmntprnortheu.oaiusercontent.com/files/00000000-8fe8-81f4-8eba-8758279245fe/raw?se=2026-08-17T16%3A35%3A55Z&sp=r&sv=2026-02-06&sr=b&scid=a0635888-e51d-503a-8865-2cf134f8b4bc&skoid=a3a8eefe-d4bd-4909-ab1d-2a75a2302fac&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-17T08%3A24%3A42Z&ske=2026-08-18T08%3A24%3A42Z&sks=b&skv=2026-02-06&sig=0G7G2X8wfdYVtnPDBVmVXIRXopr4aQwUs71wjPzklAE%3D'
+          unzip -q preview.zip -d _site
+          test -f _site/index.html
+          test -d _site/_next
+          test -f _site/source-main-sha.txt
           touch _site/.nojekyll
+          echo "Publishing private-main build $(cat _site/source-main-sha.txt)"
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: Upload site
         uses: actions/upload-pages-artifact@v4
