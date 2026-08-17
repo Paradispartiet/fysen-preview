@@ -30,13 +30,13 @@ jobs:
           set -euo pipefail
           rm -rf _site preview.zip
           mkdir -p _site
-          curl --fail --location --retry 3 --output preview.zip 'https://sdmntprnortheu.oaiusercontent.com/files/00000000-2564-81f4-824e-688eaae863ae/raw?se=2026-08-17T19%3A57%3A14Z&sp=r&sv=2026-02-06&sr=b&scid=1a1fb38f-7385-5c7c-82f1-97beceac8cbc&skoid=82a3371f-2f6c-4f81-8a78-2701b362559b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-17T06%3A55%3A05Z&ske=2026-08-18T06%3A55%3A05Z&sks=b&skv=2026-02-06&sig=9BFEybL1IO5BvHGbTN%2BhnzloDh99ImagPzj2cJGP4kY%3D'
+          curl --fail --location --retry 3 --output preview.zip 'https://sdmntprnortheu.oaiusercontent.com/files/00000000-274c-81f4-aa72-9732be0b1da3/raw?se=2026-08-17T20%3A23%3A31Z&sp=r&sv=2026-02-06&sr=b&scid=8c5f199c-e863-5672-b8a9-02c286eb9958&skoid=82a3371f-2f6c-4f81-8a78-2701b362559b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-17T04%3A52%3A51Z&ske=2026-08-18T04%3A52%3A51Z&sks=b&skv=2026-02-06&sig=u7qojCrsksfQveBDuipo/kVTw4OmwSpIXlV6YpD7HnA%3D'
           unzip -q preview.zip -d _site
           test -f _site/index.html
           test -f _site/search/index.html
           test -d _site/_next
           test -f _site/source-main-sha.txt
-          test "$(cat _site/source-main-sha.txt)" = "6ec27c1449c264226bd4d9bdc8c320959cb92544"
+          test "$(cat _site/source-main-sha.txt)" = "21662cc7ee60fff2966e27bac6e357f226e8d576"
           touch _site/.nojekyll
           echo "Publishing private-main build $(cat _site/source-main-sha.txt)"
 
