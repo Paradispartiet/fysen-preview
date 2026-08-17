@@ -2,10 +2,8 @@ name: Deploy Fysen preview
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/pages.yml"
+  repository_dispatch:
+    types: [publish-fysen-preview]
 
 permissions:
   contents: read
@@ -21,24 +19,32 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout
+      - name: Checkout published snapshot
         uses: actions/checkout@v4
+        with:
+          ref: site
 
-      - name: Fetch compiled Fysen preview
+      - name: Verify published snapshot
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EXPECTED_SOURCE_SHA: ${{ github.event.client_payload.source_sha }}
         run: |
           set -euo pipefail
-          rm -rf _site preview.zip
-          mkdir -p _site
-          curl --fail --location --retry 3 --output preview.zip 'https://sdmntprnortheu.oaiusercontent.com/files/00000000-274c-81f4-aa72-9732be0b1da3/raw?se=2026-08-17T20%3A23%3A31Z&sp=r&sv=2026-02-06&sr=b&scid=8c5f199c-e863-5672-b8a9-02c286eb9958&skoid=82a3371f-2f6c-4f81-8a78-2701b362559b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-17T04%3A52%3A51Z&ske=2026-08-18T04%3A52%3A51Z&sks=b&skv=2026-02-06&sig=u7qojCrsksfQveBDuipo/kVTw4OmwSpIXlV6YpD7HnA%3D'
-          unzip -q preview.zip -d _site
-          test -f _site/index.html
-          test -f _site/search/index.html
-          test -d _site/_next
-          test -f _site/source-main-sha.txt
-          test "$(cat _site/source-main-sha.txt)" = "21662cc7ee60fff2966e27bac6e357f226e8d576"
-          touch _site/.nojekyll
-          echo "Publishing private-main build $(cat _site/source-main-sha.txt)"
+          test -f index.html
+          test -f search/index.html
+          test -d _next
+          test -f source-main-sha.txt
+          test -f brand/fysen-mark.webp
+
+          actual_source_sha="$(cat source-main-sha.txt)"
+          if [[ "$EVENT_NAME" == "repository_dispatch" ]]; then
+            test -n "$EXPECTED_SOURCE_SHA"
+            test "$actual_source_sha" = "$EXPECTED_SOURCE_SHA"
+          fi
+
+          touch .nojekyll
+          echo "Publishing Fysen preview from private main $actual_source_sha"
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -46,7 +52,7 @@ jobs:
       - name: Upload site
         uses: actions/upload-pages-artifact@v4
         with:
-          path: _site
+          path: .
 
   deploy:
     environment:
