@@ -1,5 +1,6 @@
 name: Trigger Fysen preview now
 
+# One-shot retry after cleanup.
 on:
   push:
     branches: [main]
