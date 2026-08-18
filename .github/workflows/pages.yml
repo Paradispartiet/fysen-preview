@@ -10,7 +10,7 @@ on:
       - '.github/workflows/pages.yml'
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -154,6 +154,7 @@ jobs:
     timeout-minutes: 7
     steps:
       - name: Verify public preview matches Fysen main
+        id: public
         shell: bash
         env:
           SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
@@ -172,3 +173,17 @@ jobs:
           done
           echo "::error title=Fysen preview is stale::Public preview did not reach Fysen main SHA $SOURCE_SHA"
           exit 1
+
+      - name: Record verified preview revision
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          printf 'status=success\nsource_sha=%s\nrun_id=%s\n' "$SOURCE_SHA" "$GITHUB_RUN_ID" > /tmp/preview-status
+          encoded="$(base64 -w0 /tmp/preview-status)"
+          current_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/.preview-status.txt?ref=main" --jq .sha 2>/dev/null || true)"
+          args=(--method PUT "repos/${GITHUB_REPOSITORY}/contents/.preview-status.txt" -f message="Record verified Fysen preview ${SOURCE_SHA}" -f content="$encoded" -f branch=main)
+          if [[ -n "$current_sha" ]]; then args+=(-f sha="$current_sha"); fi
+          gh api "${args[@]}" >/dev/null
