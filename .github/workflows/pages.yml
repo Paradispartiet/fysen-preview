@@ -4,6 +4,10 @@ on:
   workflow_dispatch:
   repository_dispatch:
     types: [publish-fysen-preview]
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/pages.yml"
 
 permissions:
   contents: read
@@ -35,7 +39,7 @@ jobs:
           test -f search/index.html
           test -d _next
           test -f source-main-sha.txt
-          test -f brand/fysen-mark.webp
+          test -f brand/fysen-mark-exact.png
 
           actual_source_sha="$(cat source-main-sha.txt)"
           if [[ "$EVENT_NAME" == "repository_dispatch" ]]; then
