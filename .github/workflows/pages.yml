@@ -1,0 +1,174 @@
+name: Deploy Fysen preview
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/pages.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: fysen-preview-pages
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      source_sha: ${{ steps.refs.outputs.source_sha }}
+      needs_deploy: ${{ steps.refs.outputs.needs_deploy }}
+    steps:
+      - name: Resolve Fysen main and current public preview
+        id: refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha="$(git ls-remote https://github.com/Paradispartiet/fysen.git refs/heads/main | awk '{print $1}')"
+          test -n "$source_sha"
+          current_sha="$(curl --fail --silent --location --max-time 20 'https://paradispartiet.github.io/fysen-preview/source-main-sha.txt' 2>/dev/null | tr -d '\r\n' || true)"
+          if [[ "$source_sha" == "$current_sha" && "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
+            needs_deploy=false
+          else
+            needs_deploy=true
+          fi
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "needs_deploy=$needs_deploy" >> "$GITHUB_OUTPUT"
+          echo "Fysen main: $source_sha"
+          echo "Public preview: ${current_sha:-<none>}"
+
+  build:
+    needs: check
+    if: needs.check.outputs.needs_deploy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      source_sha: ${{ steps.source.outputs.source_sha }}
+    steps:
+      - name: Checkout public Fysen main
+        uses: actions/checkout@v4
+        with:
+          repository: Paradispartiet/fysen
+          ref: main
+          fetch-depth: 1
+
+      - name: Capture source revision
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha="$(git rev-parse HEAD)"
+          test "$source_sha" = "${{ needs.check.outputs.source_sha }}"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.4.0
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Prepare functional static preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf apps/web/app/api
+
+          cat > apps/web/app/search/page.tsx <<'EOF'
+          import { StaticPreviewSearchPage } from "../../components/static-preview-search-page";
+
+          export default function SearchPage() {
+            return <StaticPreviewSearchPage />;
+          }
+          EOF
+
+          cat > apps/web/next.config.ts <<'EOF'
+          import type { NextConfig } from "next";
+
+          const nextConfig: NextConfig = {
+            output: "export",
+            reactStrictMode: true,
+            poweredByHeader: false,
+            basePath: "/fysen-preview",
+            assetPrefix: "/fysen-preview",
+            trailingSlash: true,
+            images: { unoptimized: true },
+          };
+
+          export default nextConfig;
+          EOF
+
+      - name: Build static preview
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          NEXT_PUBLIC_FYSEN_API_BASE_URL: 'https://fysen-api.vercel.app'
+          NEXT_PUBLIC_FYSEN_BASE_PATH: '/fysen-preview'
+          NEXT_PUBLIC_DISABLE_FUNNEL_TRACKING: '1'
+        run: pnpm turbo run build --filter=@fysen/web...
+
+      - name: Verify preview artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f apps/web/out/index.html
+          test -f apps/web/out/search/index.html
+          test -d apps/web/out/_next
+          touch apps/web/out/.nojekyll
+          printf '%s\n' '${{ steps.source.outputs.source_sha }}' > apps/web/out/source-main-sha.txt
+
+      - name: Configure existing Pages site
+        uses: actions/configure-pages@v5
+
+      - name: Upload preview artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: apps/web/out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy preview
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  verify:
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Verify public preview matches Fysen main
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            public_sha="$(curl --fail --silent --show-error --location \
+              "https://paradispartiet.github.io/fysen-preview/source-main-sha.txt?source=${SOURCE_SHA}&attempt=${attempt}" \
+              2>/dev/null | tr -d '\r\n' || true)"
+            if [[ "$public_sha" == "$SOURCE_SHA" ]]; then
+              echo "Public Fysen preview now serves $SOURCE_SHA"
+              exit 0
+            fi
+            echo "Waiting for public preview: expected $SOURCE_SHA, got ${public_sha:-<unavailable>} (attempt $attempt/36)"
+            sleep 10
+          done
+          echo "::error title=Fysen preview is stale::Public preview did not reach Fysen main SHA $SOURCE_SHA"
+          exit 1
