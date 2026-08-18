@@ -1,6 +1,6 @@
 name: Deploy Fysen preview
 
-# Manual retry hook: touching this workflow triggers an immediate preview refresh in addition to the 5-minute schedule.
+# Manual retry hook: touching this workflow triggers an immediate preview refresh in addition to the 5-minute schedule. Refreshed after cleanup.
 on:
   workflow_dispatch:
   schedule:
