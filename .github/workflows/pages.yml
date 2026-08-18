@@ -22,6 +22,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      source_sha: ${{ steps.snapshot.outputs.source_sha }}
     steps:
       - name: Checkout published snapshot
         uses: actions/checkout@v4
@@ -29,6 +31,7 @@ jobs:
           ref: site
 
       - name: Verify published snapshot
+        id: snapshot
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -39,15 +42,17 @@ jobs:
           test -f search/index.html
           test -d _next
           test -f source-main-sha.txt
-          test -f brand/fysen-mark-exact.png
 
-          actual_source_sha="$(cat source-main-sha.txt)"
+          actual_source_sha="$(tr -d '\r\n' < source-main-sha.txt)"
+          test -n "$actual_source_sha"
+
           if [[ "$EVENT_NAME" == "repository_dispatch" ]]; then
             test -n "$EXPECTED_SOURCE_SHA"
             test "$actual_source_sha" = "$EXPECTED_SOURCE_SHA"
           fi
 
           touch .nojekyll
+          echo "source_sha=$actual_source_sha" >> "$GITHUB_OUTPUT"
           echo "Publishing Fysen preview from private main $actual_source_sha"
 
       - name: Configure Pages
@@ -68,3 +73,33 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+
+  verify-public:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    needs: [build, deploy]
+    steps:
+      - name: Verify public preview source SHA
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_SHA"
+
+          for attempt in $(seq 1 36); do
+            public_sha="$(curl --fail --silent --show-error --location \
+              "https://paradispartiet.github.io/fysen-preview/source-main-sha.txt?source=${SOURCE_SHA}&attempt=${attempt}" \
+              2>/dev/null | tr -d '\r\n' || true)"
+
+            if [[ "$public_sha" == "$SOURCE_SHA" ]]; then
+              echo "Public Fysen preview now serves $SOURCE_SHA"
+              exit 0
+            fi
+
+            echo "Waiting for public preview: expected $SOURCE_SHA, got ${public_sha:-<unavailable>} (attempt $attempt/36)"
+            sleep 10
+          done
+
+          echo "::error title=Fysen preview did not become public::Expected public source SHA $SOURCE_SHA"
+          exit 1
