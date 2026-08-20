@@ -1,6 +1,6 @@
 name: Deploy Fysen preview
 
-# Manual retry hook: touching this workflow triggers an immediate preview refresh in addition to the 5-minute schedule. Refreshed for 97954409.
+# Manual retry hook: touching this workflow triggers an immediate preview refresh in addition to the 5-minute schedule. Refreshed for runtime-only pages.
 on:
   workflow_dispatch:
   schedule:
@@ -96,6 +96,63 @@ jobs:
           }
           EOF
 
+          cat > apps/web/app/min-mat/page.tsx <<'EOF'
+          import { GlobalHeader } from "../../components/global-header";
+          import { withPublicBasePath } from "../../lib/public-path";
+
+          export default function MinMatPage() {
+            return (
+              <div className="minMatPage">
+                <GlobalHeader />
+                <main className="minMatShell">
+                  <header className="minMatHero">
+                    <p className="minMatEyebrow">AHA × Fysen</p>
+                    <h1>Min mat</h1>
+                    <p>Samle retter du vil huske. Søkehistorikken din blir ikke lagt her og blir ikke koblet til AHA-identiteten.</p>
+                  </header>
+                  <section className="minMatPanel minMatEmpty">
+                    <h2>Min mat i preview</h2>
+                    <p>GitHub Pages-previewen er statisk og åpner derfor ikke en ekte AHA-sesjon eller private lagrede retter.</p>
+                    <a className="minMatPrimary" href={withPublicBasePath("/search?city=Oslo")}>Finn en rett</a>
+                  </section>
+                </main>
+              </div>
+            );
+          }
+          EOF
+
+          cat > apps/web/app/pro/page.tsx <<'EOF'
+          import { GlobalHeader } from "../../components/global-header";
+          import { withPublicBasePath } from "../../lib/public-path";
+
+          export default function FysenProPage() {
+            return (
+              <div className="proPage">
+                <GlobalHeader city="Oslo" />
+                <main className="proShell">
+                  <div className="proDashboardHeader">
+                    <div>
+                      <p className="proEyebrow">Fysen Pro · preview</p>
+                      <h1>Restaurantdashboard</h1>
+                      <p className="proLead">Den offentlige previewen viser designflaten uten å eksponere en privat restaurantsesjon.</p>
+                    </div>
+                  </div>
+                  <section className="proPanel">
+                    <div className="proPanelHeader">
+                      <div>
+                        <p className="proEyebrow">Sikker preview</p>
+                        <h2>Ekte dashboarddata krever verifisert tilgang</h2>
+                      </div>
+                    </div>
+                    <p className="proPanelIntro">Produksjonsversjonen bruker en sikker session-cookie for restaurantens egne visninger, handlinger, menykilder og booking-/bestillingsstatus. Denne statiske GitHub Pages-versjonen leser ingen slik sesjon.</p>
+                    <p><a href={withPublicBasePath("/pro/login")}>Se innloggingsflaten →</a></p>
+                  </section>
+                </main>
+              </div>
+            );
+          }
+          EOF
+
           cat > apps/web/next.config.ts <<'EOF'
           import type { NextConfig } from "next";
 
@@ -126,6 +183,8 @@ jobs:
           set -euo pipefail
           test -f apps/web/out/index.html
           test -f apps/web/out/search/index.html
+          test -f apps/web/out/min-mat/index.html
+          test -f apps/web/out/pro/index.html
           test -d apps/web/out/_next
           touch apps/web/out/.nojekyll
           printf '%s\n' '${{ steps.source.outputs.source_sha }}' > apps/web/out/source-main-sha.txt
