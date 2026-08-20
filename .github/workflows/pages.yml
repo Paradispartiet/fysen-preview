@@ -96,6 +96,31 @@ jobs:
           }
           EOF
 
+          cat > apps/web/app/claim/page.tsx <<'EOF'
+          import { GlobalHeader } from "../../components/global-header";
+          import { dishBrowseHref } from "../../lib/public-path";
+
+          export default function ClaimPage() {
+            return (
+              <div className="claimPage">
+                <GlobalHeader city="Oslo" />
+                <main className="claimMain">
+                  <a className="claimBackLink" href={dishBrowseHref("Oslo")}>← Tilbake til rettene</a>
+                  <section className="claimCard">
+                    <p className="claimEyebrow">Claim Restaurant · preview</p>
+                    <h1>Verifisert restauranttilgang</h1>
+                    <p>Den offentlige GitHub Pages-previewen viser claim-flaten uten å slå opp en konkret restaurant eller sende en ekte forespørsel.</p>
+                    <div className="claimPrinciples">
+                      <p>I produksjon åpnes denne siden fra en restaurant som allerede finnes i Fysen, og tilknytningen verifiseres manuelt før tilgang gis.</p>
+                      <p>Claiming gir aldri rett til å omskrive Fysens kildebevis, historiske menydata eller organiske rangering.</p>
+                    </div>
+                  </section>
+                </main>
+              </div>
+            );
+          }
+          EOF
+
           cat > apps/web/app/min-mat/page.tsx <<'EOF'
           import { GlobalHeader } from "../../components/global-header";
           import { withPublicBasePath } from "../../lib/public-path";
@@ -183,6 +208,7 @@ jobs:
           set -euo pipefail
           test -f apps/web/out/index.html
           test -f apps/web/out/search/index.html
+          test -f apps/web/out/claim/index.html
           test -f apps/web/out/min-mat/index.html
           test -f apps/web/out/pro/index.html
           test -d apps/web/out/_next
