@@ -1,7 +1,7 @@
 name: Deploy Fysen preview
 
 # Manual retry hook: touching this workflow triggers an immediate preview refresh in addition to the 5-minute schedule.
-# Rebuild against Fysen main after verified documented-menu fallback was merged as PR #1166 on 2026-11-11.
+# Rebuild from Fysen main with PR #1167: neutral public menu copy; status lives under Om menydata.
 on:
   workflow_dispatch:
   schedule:
