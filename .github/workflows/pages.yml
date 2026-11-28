@@ -195,6 +195,38 @@ jobs:
           export default nextConfig;
           EOF
 
+      - name: Stage isolated Fysen map candidate
+        shell: bash
+        env:
+          MAP_CANDIDATE_SHA: '709012221af9bfe1326f617a123704106e87ea54'
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$MAP_CANDIDATE_SHA"
+          test "$(git rev-parse FETCH_HEAD)" = "$MAP_CANDIDATE_SHA"
+          for file in \
+            apps/web/components/restaurant-map.tsx \
+            apps/web/components/restaurant-map.module.css \
+            apps/web/lib/fysen-map-foundation.mjs \
+            apps/web/lib/fysen-map-foundation.d.mts \
+            apps/web/lib/fysen-map-frame.ts \
+            apps/web/lib/map-menu-evidence.ts \
+            apps/web/lib/restaurant-menu-source-data.ts; do
+            git show "$MAP_CANDIDATE_SHA:$file" > "$file"
+          done
+          mkdir -p apps/web/app/kart-test
+          git show "$MAP_CANDIDATE_SHA:apps/web/app/kart/page.tsx" > apps/web/app/kart-test/page.tsx
+          git show "$MAP_CANDIDATE_SHA:apps/web/scripts/generate-restaurant-coordinates.mjs" > apps/web/scripts/generate-restaurant-map-preview.mjs
+          node apps/web/scripts/generate-restaurant-map-preview.mjs
+          # The static preview cannot execute the candidate's server-side dish search.
+          # Keep that path in the canonical production search, and say so on the test page.
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("apps/web/app/kart-test/page.tsx")
+          text = path.read_text()
+          text = text.replace("<main><RestaurantMap", "<main><p role=\"note\" style={{padding: 12}}>Karttest: kart, spisesteder og lokal posisjon kan prøves her. Rettsøk åpner vanlig søk; kartfiltrering på retter krever serverversjonen.</p><RestaurantMap")
+          path.write_text(text)
+          PY
+
       - name: Build static preview
         env:
           NEXT_TELEMETRY_DISABLED: '1'
@@ -213,6 +245,8 @@ jobs:
           test -f apps/web/out/min-mat/index.html
           test -f apps/web/out/pro/index.html
           test -d apps/web/out/_next
+          test -f apps/web/out/kart-test/index.html
+          printf '%s\n' '709012221af9bfe1326f617a123704106e87ea54' > apps/web/out/kart-test/source-sha.txt
           touch apps/web/out/.nojekyll
           printf '%s\n' '${{ steps.source.outputs.source_sha }}' > apps/web/out/source-main-sha.txt
 
@@ -252,8 +286,11 @@ jobs:
               "https://paradispartiet.github.io/fysen-preview/source-main-sha.txt?source=${SOURCE_SHA}&attempt=${attempt}" \
               2>/dev/null | tr -d '\r\n' || true)"
             if [[ "$public_sha" == "$SOURCE_SHA" ]]; then
-              echo "Public Fysen preview now serves $SOURCE_SHA"
-              exit 0
+              map_sha="$(curl --fail --silent --location --max-time 20 "https://paradispartiet.github.io/fysen-preview/kart-test/source-sha.txt?attempt=${attempt}" 2>/dev/null | tr -d '\r\n' || true)"
+              if [[ "$map_sha" == "709012221af9bfe1326f617a123704106e87ea54" ]]; then
+                echo "Public Fysen preview now serves $SOURCE_SHA and map candidate $map_sha"
+                exit 0
+              fi
             fi
             echo "Waiting for public preview: expected $SOURCE_SHA, got ${public_sha:-<unavailable>} (attempt $attempt/36)"
             sleep 10
