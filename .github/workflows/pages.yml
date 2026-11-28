@@ -35,7 +35,8 @@ jobs:
           source_sha="$(git ls-remote https://github.com/Paradispartiet/fysen.git refs/heads/main | awk '{print $1}')"
           test -n "$source_sha"
           current_sha="$(curl --fail --silent --location --max-time 20 'https://paradispartiet.github.io/fysen-preview/source-main-sha.txt' 2>/dev/null | tr -d '\r\n' || true)"
-          if [[ "$source_sha" == "$current_sha" && "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
+          current_map_sha="$(curl --fail --silent --location --max-time 20 'https://paradispartiet.github.io/fysen-preview/kart-test/source-sha.txt' 2>/dev/null | tr -d '\r\n' || true)"
+          if [[ "$source_sha" == "$current_sha" && "$current_map_sha" == "709012221af9bfe1326f617a123704106e87ea54" && "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
             needs_deploy=false
           else
             needs_deploy=true
