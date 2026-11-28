@@ -238,7 +238,11 @@ jobs:
           test -d apps/web/out/_next
           test -f apps/web/out/kart-test/index.html
           test -f apps/web/out/kart/index.html
-          if [[ -f apps/web/scripts/generate-static-map-menu.mjs ]]; then test -s apps/web/out/map-data/menus.json; fi
+          if [[ -f apps/web/scripts/generate-static-map-menu.mjs ]]; then
+            test -s apps/web/out/map-data/menus.json
+            python3 -c 'import json; p=json.load(open("apps/web/out/map-data/menus.json")); assert p["source"]=="verified-menu-archive" and p["realtime"] is False and p["groups"]; print("Static menu groups:", len(p["groups"])); print("Static menu items:", sum(len(g["items"]) for g in p["groups"]))'
+            sha256sum apps/web/out/map-data/menus.json | cut -d ' ' -f1 > apps/web/out/map-data/sha256.txt
+          fi
           printf '%s\n' '${{ steps.source.outputs.source_sha }}' > apps/web/out/kart-test/source-sha.txt
           cp apps/web/out/kart-test/source-sha.txt apps/web/out/kart/source-sha.txt
           touch apps/web/out/.nojekyll
@@ -282,8 +286,12 @@ jobs:
             if [[ "$public_sha" == "$SOURCE_SHA" ]]; then
               map_sha="$(curl --fail --silent --location --max-time 20 "https://paradispartiet.github.io/fysen-preview/kart-test/source-sha.txt?attempt=${attempt}" 2>/dev/null | tr -d '\r\n' || true)"
               if [[ "$map_sha" == "$SOURCE_SHA" ]] && curl --fail --silent --location --max-time 20 "https://paradispartiet.github.io/fysen-preview/kart/" >/dev/null; then
-                echo "Public Fysen preview now serves $SOURCE_SHA and integrated map $map_sha"
-                exit 0
+                menu_sha="$(curl --fail --silent --location --max-time 20 "https://paradispartiet.github.io/fysen-preview/map-data/sha256.txt?source=${SOURCE_SHA}" 2>/dev/null | tr -d '\r\n' || true)"
+                if [[ "$menu_sha" =~ ^[a-f0-9]{64}$ ]] && curl --fail --silent --location --max-time 60 "https://paradispartiet.github.io/fysen-preview/map-data/menus.json?sha256=${menu_sha}" -o /tmp/fysen-map-menus.json && [[ "$(sha256sum /tmp/fysen-map-menus.json | cut -d ' ' -f1)" == "$menu_sha" ]]; then
+                  python3 -c 'import json; p=json.load(open("/tmp/fysen-map-menus.json")); assert p["source"]=="verified-menu-archive" and p["realtime"] is False and p["groups"]; print("Public menu groups:", len(p["groups"])); print("Public menu items:", sum(len(g["items"]) for g in p["groups"]))'
+                  echo "Public Fysen preview now serves $SOURCE_SHA, integrated map $map_sha and verified static menus $menu_sha"
+                  exit 0
+                fi
               fi
             fi
             echo "Waiting for public preview: expected $SOURCE_SHA, got ${public_sha:-<unavailable>} (attempt $attempt/36)"
