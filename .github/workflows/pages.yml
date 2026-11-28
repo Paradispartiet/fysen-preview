@@ -196,24 +196,27 @@ jobs:
           export default nextConfig;
           EOF
 
-      - name: Use integrated map from Fysen main
+      - name: Prepare integrated Fysen map and static menu data
         shell: bash
         run: |
           set -euo pipefail
           test -f apps/web/app/kart/page.tsx
-          # Keep the previously shared test URL working as an alias.
           mkdir -p apps/web/app/kart-test
           printf '%s\n' 'export { default, metadata } from "../kart/page";' > apps/web/app/kart-test/page.tsx
-          # Static preview routes dish searches to the existing search page.
-          python3 - <<'PY'
+          if [[ -f apps/web/scripts/generate-static-map-menu.mjs ]]; then
+            node apps/web/scripts/generate-static-map-menu.mjs
+            test -s apps/web/public/map-data/menus.json
+          else
+            # Keep the current integrated map usable until the static index code is merged.
+            python3 - <<'PY'
           from pathlib import Path
           path = Path("apps/web/app/kart/page.tsx")
           text = path.read_text()
           anchor = "<main><RestaurantMap"
           if anchor in text:
-              text = text.replace(anchor, '<main><p role="note" style={{padding: 12}}>Rettsøk åpner vanlig søk i denne statiske visningen.</p><RestaurantMap', 1)
-              path.write_text(text)
+              path.write_text(text.replace(anchor, '<main><p role="note" style={{padding: 12}}>Rettsøk åpner vanlig søk i denne statiske visningen.</p><RestaurantMap', 1))
           PY
+          fi
 
       - name: Build static preview
         env:
@@ -235,6 +238,7 @@ jobs:
           test -d apps/web/out/_next
           test -f apps/web/out/kart-test/index.html
           test -f apps/web/out/kart/index.html
+          if [[ -f apps/web/scripts/generate-static-map-menu.mjs ]]; then test -s apps/web/out/map-data/menus.json; fi
           printf '%s\n' '${{ steps.source.outputs.source_sha }}' > apps/web/out/kart-test/source-sha.txt
           cp apps/web/out/kart-test/source-sha.txt apps/web/out/kart/source-sha.txt
           touch apps/web/out/.nojekyll
