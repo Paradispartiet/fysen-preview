@@ -36,7 +36,7 @@ jobs:
           test -n "$source_sha"
           current_sha="$(curl --fail --silent --location --max-time 20 'https://paradispartiet.github.io/fysen-preview/source-main-sha.txt' 2>/dev/null | tr -d '\r\n' || true)"
           current_map_sha="$(curl --fail --silent --location --max-time 20 'https://paradispartiet.github.io/fysen-preview/kart-test/source-sha.txt' 2>/dev/null | tr -d '\r\n' || true)"
-          if [[ "$source_sha" == "$current_sha" && "$current_map_sha" == "709012221af9bfe1326f617a123704106e87ea54" && "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
+          if [[ "$source_sha" == "$current_sha" && "$current_map_sha" == "$source_sha" && "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
             needs_deploy=false
           else
             needs_deploy=true
@@ -196,36 +196,23 @@ jobs:
           export default nextConfig;
           EOF
 
-      - name: Stage isolated Fysen map candidate
+      - name: Use integrated map from Fysen main
         shell: bash
-        env:
-          MAP_CANDIDATE_SHA: '709012221af9bfe1326f617a123704106e87ea54'
         run: |
           set -euo pipefail
-          git fetch --no-tags --depth=1 origin "$MAP_CANDIDATE_SHA"
-          test "$(git rev-parse FETCH_HEAD)" = "$MAP_CANDIDATE_SHA"
-          for file in \
-            apps/web/components/restaurant-map.tsx \
-            apps/web/components/restaurant-map.module.css \
-            apps/web/lib/fysen-map-foundation.mjs \
-            apps/web/lib/fysen-map-foundation.d.mts \
-            apps/web/lib/fysen-map-frame.ts \
-            apps/web/lib/map-menu-evidence.ts \
-            apps/web/lib/restaurant-menu-source-data.ts; do
-            git show "$MAP_CANDIDATE_SHA:$file" > "$file"
-          done
+          test -f apps/web/app/kart/page.tsx
+          # Keep the previously shared test URL working as an alias.
           mkdir -p apps/web/app/kart-test
-          git show "$MAP_CANDIDATE_SHA:apps/web/app/kart/page.tsx" > apps/web/app/kart-test/page.tsx
-          git show "$MAP_CANDIDATE_SHA:apps/web/scripts/generate-restaurant-coordinates.mjs" > apps/web/scripts/generate-restaurant-map-preview.mjs
-          node apps/web/scripts/generate-restaurant-map-preview.mjs
-          # The static preview cannot execute the candidate's server-side dish search.
-          # Keep that path in the canonical production search, and say so on the test page.
+          printf '%s\n' 'export { default, metadata } from "../kart/page";' > apps/web/app/kart-test/page.tsx
+          # Static preview routes dish searches to the existing search page.
           python3 - <<'PY'
           from pathlib import Path
-          path = Path("apps/web/app/kart-test/page.tsx")
+          path = Path("apps/web/app/kart/page.tsx")
           text = path.read_text()
-          text = text.replace("<main><RestaurantMap", "<main><p role=\"note\" style={{padding: 12}}>Karttest: kart, spisesteder og lokal posisjon kan prøves her. Rettsøk åpner vanlig søk; kartfiltrering på retter krever serverversjonen.</p><RestaurantMap")
-          path.write_text(text)
+          anchor = "<main><RestaurantMap"
+          if anchor in text:
+              text = text.replace(anchor, '<main><p role="note" style={{padding: 12}}>Rettsøk åpner vanlig søk i denne statiske visningen.</p><RestaurantMap', 1)
+              path.write_text(text)
           PY
 
       - name: Build static preview
@@ -247,7 +234,9 @@ jobs:
           test -f apps/web/out/pro/index.html
           test -d apps/web/out/_next
           test -f apps/web/out/kart-test/index.html
-          printf '%s\n' '709012221af9bfe1326f617a123704106e87ea54' > apps/web/out/kart-test/source-sha.txt
+          test -f apps/web/out/kart/index.html
+          printf '%s\n' '${{ steps.source.outputs.source_sha }}' > apps/web/out/kart-test/source-sha.txt
+          cp apps/web/out/kart-test/source-sha.txt apps/web/out/kart/source-sha.txt
           touch apps/web/out/.nojekyll
           printf '%s\n' '${{ steps.source.outputs.source_sha }}' > apps/web/out/source-main-sha.txt
 
@@ -288,8 +277,8 @@ jobs:
               2>/dev/null | tr -d '\r\n' || true)"
             if [[ "$public_sha" == "$SOURCE_SHA" ]]; then
               map_sha="$(curl --fail --silent --location --max-time 20 "https://paradispartiet.github.io/fysen-preview/kart-test/source-sha.txt?attempt=${attempt}" 2>/dev/null | tr -d '\r\n' || true)"
-              if [[ "$map_sha" == "709012221af9bfe1326f617a123704106e87ea54" ]]; then
-                echo "Public Fysen preview now serves $SOURCE_SHA and map candidate $map_sha"
+              if [[ "$map_sha" == "$SOURCE_SHA" ]] && curl --fail --silent --location --max-time 20 "https://paradispartiet.github.io/fysen-preview/kart/" >/dev/null; then
+                echo "Public Fysen preview now serves $SOURCE_SHA and integrated map $map_sha"
                 exit 0
               fi
             fi
