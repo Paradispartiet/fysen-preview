@@ -1,7 +1,7 @@
 name: Deploy Fysen preview
 
 # Manual retry hook: touching this workflow triggers an immediate preview refresh in addition to the 5-minute schedule.
-# Refresh verified Fysen main after PR #1378: natural daylight map.
+# Refresh verified Fysen main after PR #1380: clearer restaurant markers and touch selection.
 on:
   workflow_dispatch:
   schedule:
