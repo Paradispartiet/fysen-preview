@@ -1,7 +1,7 @@
 name: Deploy Fysen preview
 
 # Manual retry hook: touching this workflow triggers an immediate preview refresh in addition to the 5-minute schedule.
-# Refresh verified Fysen main after PR #1362: native-resolution dish images in Matleksikon detail.
+# Refresh verified Fysen main after PR #1378: natural daylight map.
 on:
   workflow_dispatch:
   schedule:
