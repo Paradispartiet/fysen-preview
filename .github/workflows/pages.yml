@@ -1,7 +1,7 @@
 name: Deploy Fysen preview
 
 # Manual retry hook: touching this workflow triggers an immediate preview refresh in addition to the 5-minute schedule.
-# Refresh Fysen main after PR #1382: documented menu price filters.
+# Refresh Fysen main after PR #1383: calm simplified daytime map.
 on:
   workflow_dispatch:
   schedule:
